@@ -274,6 +274,13 @@ fn handle_smtp_connection(
 
                         user_storage.add_email_to_matching_groups(username, email.uid, &received.from);
 
+                        // rspamd scored it and wrote X-Spam: Yes; until now nothing read that, so flagged mail sat in the inbox.
+                        if crate::core::quarantine::is_spam_flagged(&received.headers) {
+                            info!("[SMTP] Spam-flagged on arrival - filing uid={} into '{}'", email.uid,
+                                crate::core::quarantine::JUNK_GROUP_TITLE);
+                            user_storage.file_email_as_junk(username, email.uid);
+                        }
+
                         if let Err(e) = user_storage.save_to_file() {
                             warn!("[SMTP] Failed to persist user storage after delivery for '{}': {}", username, e);
                         }

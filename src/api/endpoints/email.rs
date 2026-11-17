@@ -135,7 +135,10 @@ pub fn email_flags(
         }
     };
 
-    let mut all: Vec<u128> = user.emailIds.clone();
+    // Quarantined mail is excluded here too: the flags list drives the inbox, and a message filed into Junk that still appears in
+    // the inbox is not quarantined at all.
+    let junk = user.junk_email_uids();
+    let mut all: Vec<u128> = user.emailIds.iter().copied().filter(|uid| !junk.contains(uid)).collect();
     all.extend(user.sent_emails.iter().copied());
     all.sort_unstable();
     all.dedup();
@@ -164,7 +167,10 @@ pub fn list_email_uids(
         }
     };
 
-    let resp = EmailUidsResponse { uids: user.emailIds.clone() };
+    // Groups are labels, not folders, so the uid stays in emailIds for retrieval; excluding it here is what makes Junk behave
+    // like a place instead of a tag.
+    let junk = user.junk_email_uids();
+    let resp = EmailUidsResponse { uids: user.emailIds.iter().copied().filter(|uid| !junk.contains(uid)).collect() };
     let body = serde_json::to_vec(&resp).unwrap();
     Response::from_data(body).with_status_code(200).with_header(json_header())
 }

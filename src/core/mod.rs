@@ -16,6 +16,8 @@ pub mod sessions;
 pub mod pending;
 pub use pending as pending_mail;
 
+pub mod quarantine;
+
 pub mod sendlimit;
 
 pub mod signup_ip;

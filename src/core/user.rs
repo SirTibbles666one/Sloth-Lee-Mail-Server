@@ -25,6 +25,17 @@ pub struct Group {
     pub filter_addresses: Vec<String>,
 }
 
+impl User {
+    /// The uids currently quarantined. A lookup, not a copy of the truth: the Junk group's membership is the record.
+    pub fn junk_email_uids(&self) -> std::collections::HashSet<u128> {
+        self.groups
+            .iter()
+            .filter(|g| crate::core::quarantine::is_junk_group_title(&g.title))
+            .flat_map(|g| g.email_uids.iter().copied())
+            .collect()
+    }
+}
+
 impl Group {
     pub fn new(title: String, filter_addresses: Vec<String>) -> Self {
         Group {
@@ -436,6 +447,29 @@ impl UserStorage {
     }
 
     
+    /// File a message into the system Junk group, creating that group the first time it is needed.
+    ///
+    /// Groups are labels, not folders: the uid stays in `emailIds` (the message must remain retrievable, and deleting a label must
+    /// never delete mail), so the INBOX listing is what has to exclude quarantined mail — see `junk_email_uids`, which the listing
+    /// endpoints use. Filing without that exclusion would leave spam in the inbox and change nothing visible.
+    pub fn file_email_as_junk(&self, username: &str, email_uid: u128) {
+        let mut users = self.lock_users();
+        if let Some(user) = users.get_mut(username) {
+            match user.groups.iter_mut().find(|g| crate::core::quarantine::is_junk_group_title(&g.title)) {
+                Some(group) => {
+                    if !group.email_uids.contains(&email_uid) {
+                        group.email_uids.push(email_uid);
+                    }
+                }
+                None => {
+                    let mut group = Group::new(crate::core::quarantine::JUNK_GROUP_TITLE.to_string(), Vec::new());
+                    group.email_uids.push(email_uid);
+                    user.groups.push(group);
+                }
+            }
+        }
+    }
+
     pub fn add_email_to_group(&self, username: &str, group_uid: u128, email_uid: u128) -> bool {
         let mut users = self.lock_users();
         if let Some(user) = users.get_mut(username) {
